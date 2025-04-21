@@ -79,11 +79,11 @@ We need multiple librairies:
 - `trl`for the trainer class
 """
 
-!pip install -q -U bitsandbytes
-!pip install -q -U peft
-!pip install -q -U trl
-!pip install -q -U tensorboardX
-!pip install -q wandb
+#!pip install -q -U bitsandbytes
+#!pip install -q -U peft
+#!pip install -q -U trl
+#!pip install -q -U tensorboardX
+#!pip install -q wandb
 
 """## Step 3: Create your Hugging Face Token to push your model to the Hub
 
@@ -122,7 +122,9 @@ set_seed(seed)
 import os
 
 # Put your HF Token here
-os.environ['HF_TOKEN']="hf_xxxxxxx" # the token should have write access
+with open('hf_token.txt', 'r') as f:
+    os.environ['HF_TOKEN'] = f.read()    
+os.environ['PYTORCH_CUDA_ALLOC_CONF']="expandable_segments:True"
 
 """## Step 5: Processing the dataset into inputs
 
@@ -136,12 +138,17 @@ This is the role of our **preprocess** function. To go from a list of messages, 
 
 """
 
-model_name = "google/gemma-2-2b-it"
+#model_name = "google/gemma-2-2b-it"
+model_name = "HuggingFaceTB/SmolLM2-1.7B-Instruct"
 dataset_name = "Jofthomas/hermes-function-calling-thinking-V1"
+dataset = load_dataset(dataset_name)
+print(dataset["train"][8]["conversations"])
+dataset = dataset.rename_column("conversations", "messages")
+
+
+
 tokenizer = AutoTokenizer.from_pretrained(model_name)
-
 tokenizer.chat_template = "{{ bos_token }}{% if messages[0]['role'] == 'system' %}{{ raise_exception('System role not supported') }}{% endif %}{% for message in messages %}{{ '<start_of_turn>' + message['role'] + '\n' + message['content'] | trim + '<end_of_turn><eos>\n' }}{% endfor %}{% if add_generation_prompt %}{{'<start_of_turn>model\n'}}{% endif %}"
-
 
 def preprocess(sample):
       messages = sample["messages"]
@@ -159,8 +166,6 @@ def preprocess(sample):
 
 
 
-dataset = load_dataset(dataset_name)
-dataset = dataset.rename_column("conversations", "messages")
 
 """## Step 6: A Dedicated Dataset for This Unit
 
@@ -262,8 +267,9 @@ peft_config = LoraConfig(r=rank_dimension,
 In this step, we define the Trainer, the class that we use to fine-tune our model and the hyperparameters.
 """
 
-username="Jofthomas"# REPLCAE with your Hugging Face username
-output_dir = "gemma-2-2B-it-thinking-function_calling-V0" # The directory where the trained model checkpoints, logs, and other artifacts will be saved. It will also be the default name of the model when pushed to the hub if not redefined later.
+username="gbv"# REPLCAE with your Hugging Face username
+#output_dir = "gemma-2-2B-it-thinking-function_calling-V0" # The directory where the trained model checkpoints, logs, and other artifacts will be saved. It will also be the default name of the model when pushed to the hub if not redefined later.
+output_dir = "SmolLM2-1.7B-Instruct-thinking-function_calling-V0" # The directory where the trained model checkpoints, logs, and other artifacts will be saved. It will also be the default name of the model when pushed to the hub if not redefined later.
 per_device_train_batch_size = 1
 per_device_eval_batch_size = 1
 gradient_accumulation_steps = 4
@@ -359,7 +365,7 @@ model = AutoModelForCausalLM.from_pretrained(config.base_model_name_or_path,
 tokenizer = AutoTokenizer.from_pretrained(peft_model_id)
 model.resize_token_embeddings(len(tokenizer))
 model = PeftModel.from_pretrained(model, peft_model_id)
-model.to(torch.bfloat16)
+model.to(device="cuda")#torch.bfloat16)
 model.eval()
 
 print(dataset["test"][8]["text"])
